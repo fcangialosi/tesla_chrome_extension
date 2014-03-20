@@ -1,0 +1,25 @@
+{
+  "background": {
+    "persistent": true,
+    "page": "background.html"
+  },
+  "browser_action": {
+    "default_icon": "honors_read.png"
+  },
+  "icons" : {
+    "128" : "tesla_icon.png"
+  },
+  "description": "Alerts you when there's a new message on Japes.",
+  "name": "TESLA Notifier",
+  "permissions": [
+    "alarms",
+    "tabs",
+    "storage",
+    "webNavigation",
+    "webRequest",
+    "*://z4.invisionfree.com/*",
+    "*://sheltered-springs-7574.herokuapp.com/*"
+   ],
+  "version": "0.1",
+  "manifest_version": 2
+}
