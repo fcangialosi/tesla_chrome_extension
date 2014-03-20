@@ -7,7 +7,7 @@ save.onclick = function(){
 	var rectenna = document.getElementById('rectenna').checked,
         antenna = document.getElementById('antenna').checked,
         modeling = document.getElementById('modeling').checked,
-        gigabox = document.getElementById('gigabox').checked,
+        lossy = document.getElementById('lossy').checked,
         grant = document.getElementById('grant').checked,
         ip = document.getElementById('ip').checked,
         notifications = document.getElementById('notifications').checked,
@@ -23,8 +23,8 @@ save.onclick = function(){
    		team = "Antenna Team";
     else if(modeling)
     	team = "Modeling Team";
-    else if(gigabox)
-    	team = "Gigabox Team";
+    else if(lossy)
+    	team = "Lossy Events Team";
     
     // Any of these possible
     if(grant)
@@ -32,11 +32,11 @@ save.onclick = function(){
     if(ip)
         ipTeam = true;
     if(notifications)
-    	notify = "On";
+    	notify = true;
 
     // Once we've recieved confirmation that the request succeded, 
     // display success, wait a bit, then close the window
-	chrome.runtime.sendMessage({"team":team,"notifications":notify,"isOnGrantTeam":grantTeam,"isOnIPTeam":ipTeam}, function(response){
+	chrome.runtime.sendMessage({"team":team,"notifications":notify,"grantTeam":grantTeam,"ipTeam":ipTeam}, function(response){
         save.textContent = "Success! :)";
         save.setAttribute('class','btn btn-success btn-lg');
         setTimeout(function(){window.close()}, 2500);
