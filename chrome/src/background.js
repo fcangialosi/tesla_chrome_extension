@@ -153,47 +153,48 @@ function updateIcon(numTotal, flags){
  * the necessary flags are removed.
  */
 function onUrlVisit(req){
-  console.log("url visited");
   var forumURL = "http://z4.invisionfree.com/japes/index.php?showforum=";
   var unreadGeneral = localStorage.serverGeneral-localStorage.readGeneral;
   var unreadTeam = localStorage.serverTeam-localStorage.readTeam;
   var unreadGrant = localStorage.serverGrant-localStorage.readGrant;
   var unreadIp = localStorage.serverIp-localStorage.readIp;
 
-  if ((req.url == (forumURL+teams["General"]))&&(unreadGeneral>0)){
-    console.log("1");
+  if ((req.url.indexOf(teams["General"])!=-1)&&(unreadGeneral>0)){
     localStorage.readGeneral = localStorage.serverGeneral;
     total = unreadTeam + unreadGrant + unreadIp;
     if(total>0)
       updateIcon(total,"T");
     else
       updateIcon(0,null);
-  } else if ((req.url == (forumURL+teams[localStorage.teamName]))&&(unreadTeam>0)){
-    console.log("2");
+  } else if ((req.url.indexOf(teams[localStorage.teamName])!=-1)&&(unreadTeam>0)){
     localStorage.readTeam = localStorage.serverTeam;
     total = unreadGeneral + unreadGrant + unreadIp;
     if(total>0 && total==unreadGeneral)
       updateIcon(total,"G");
+    else if(total>0 && unreadGeneral==0)
+      updateIcon(total,"T")
     else if(total>0)
       updateIcon(total,"GT")
     else 
       updateIcon(0,null);
-  } else if ((req.url == (forumURL+teams["Grant Team"]))&&(unreadGrant>0)){
-    console.log("3");
+  } else if ((req.url.indexOf(teams["Grant Team"])!=-1)&&(unreadGrant>0)){
     localStorage.readGrant = localStorage.serverGrant;
     total = unreadGeneral + unreadTeam + unreadIp;
     if(total>0 && total==unreadGeneral)
       updateIcon(total,"G");
+    else if(total>0 && unreadGeneral==0)
+      updateIcon(total,"T")
     else if(total>0)
       updateIcon(total,"GT")
     else 
       updateIcon(0,null);
-  } else if ((req.url == (forumURL+teams["IP Team"]))&&(unreadIp>0)){
-    console.log("4");
+  } else if ((req.url.indexOf(teams["IP Team"])!=-1)&&(unreadIp>0)){
     localStorage.readIp = localStorage.serverIp;
     total = unreadGeneral + unreadGrant + unreadTeam;
     if(total>0 && total==unreadGeneral)
       updateIcon(total,"G");
+    else if(total>0 && unreadGeneral==0)
+      updateIcon(total,"T")
     else if(total>0)
       updateIcon(total,"GT")
     else 
