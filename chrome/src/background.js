@@ -1,13 +1,15 @@
+
 var japesUrl = "http://z4.invisionfree.com/japes/";
-var unreadJSON = "http://sheltered-springs-7574.herokuapp.com/data/unread.json";
+var unreadJSON = "http://sheltered-springs-7574.herokuapp.com/posts";
+
 var teams = {
-  "General" : "60",
-  "Modeling Team" : "66",
-  "Lossy Events Team" : "69",
-  "Antenna Team" : "68",
-  "Rectenna Team" : "65",
-  "IP Team" : "67",
-  "Grant Team" : "70"
+  "general" : "60",
+  "modeling" : "66",
+  "lossy" : "69",
+  "antenna" : "68",
+  "rectenna" : "65",
+  "ip" : "67",
+  "grant" : "70"
 }
 
 // Entry point when first installed
@@ -58,9 +60,9 @@ function onInstall(){
 function beginAcceptingRequests(){
   chrome.browserAction.setPopup({popup:""});
   chrome.browserAction.onClicked.addListener(goToForum);
-  chrome.alarms.onAlarm.addListener(makeRequest);
-  chrome.webRequest.onBeforeRequest.addListener(onUrlVisit,{urls:["*://z4.invisionfree.com/japes/*"]},[]);
-  makeRequest();
+  chrome.alarms.onAlarm.addListener(getPosts);
+  chrome.webRequest.onBeforeRequest.addListener(onUrlVisit,{urls:["*://z4.invisionfree.com/japes/*"]},["requestBody"]);
+  getPosts();
   addAlarm();
 };
 
@@ -77,7 +79,6 @@ function addAlarm(){
  * Switches to Japes tab if already open, or creates a new tab if not
  */
 function goToForum(){
-  console.log("Navigating to Japes page...");
   chrome.tabs.getAllInWindow(undefined, function (tabs) {
       for (var i=0, tab; tab = tabs[i]; i++) {
         if(tab.url && tab.url.indexOf(japesUrl) != -1){
@@ -95,10 +96,19 @@ function goToForum(){
  * Makes the HTTP GET request to our server to check for new messages
  * Called by alarm callback every periodInMinutes
  */
-function makeRequest(){
+function getPosts(){
   var req = new XMLHttpRequest();
   req.open("GET",unreadJSON,true);
   req.onload = onSuccess;
+  req.onerror = function(e){console.log("Error " + e.target.status)};
+  req.send(null);
+}
+
+function newPost(forum_num){
+  var req = new XMLHttpRequest();
+  var postUrl = "http://sheltered-springs-7574.herokuapp.com/newpost?secret=42xigUBluzIGgGl8zOSA&forum_num="+forum_num+"&topic_num="+topic_num;
+  req.open("POST",(postUrl),true);
+  req.onload = function(e){console.log("Successful post: " + e)};
   req.onerror = function(e){console.log("Error " + e.target.status)};
   req.send(null);
 }
@@ -111,19 +121,16 @@ function makeRequest(){
 function onSuccess(e){
   var posts = JSON.parse(e.target.responseText);
   if(!(localStorage.serverGeneral == localStorage.readGeneral)||(localStorage.severTeam==localStorage.readTeam)||(localStorage.serverGrant==localStorage.readGrant)||(localStorage.serverIp==localStorage.readIp)){
-    localStorage.serverGeneral = parseInt(posts["General"]);
+    localStorage.serverGeneral = parseInt(posts["general"]);
     localStorage.serverTeam = parseInt(posts[localStorage.teamName]);
     if(localStorage.isOnGrantTeam)
-      localStorage.serverGrant = parseInt(posts["Grant Team"]);
+      localStorage.serverGrant = parseInt(posts["grant"]);
     if(localStorage.isOnIpTeam)
-      localStorage.serverIp = parseInt(posts["IP Team"]);
+      localStorage.serverIp = parseInt(posts["ip"]);
 
     var unreadGeneral = parseInt(localStorage.serverGeneral) - parseInt(localStorage.readGeneral);
     var unreadTeam = (parseInt(localStorage.serverTeam)+parseInt(localStorage.serverGrant)+parseInt(localStorage.serverIp)) - (parseInt(localStorage.readTeam)+parseInt(localStorage.readGrant)+parseInt(localStorage.readIp));
     var flags = ""
-
-    console.log(unreadGeneral);
-    console.log(unreadTeam);
 
     if(unreadGeneral > 0)
       flags += "G";
@@ -135,7 +142,6 @@ function onSuccess(e){
 }
 
 function updateIcon(numTotal, flags){
-  console.log('updating icon');
   if(numTotal > 0){
     chrome.browserAction.setIcon({path:"honors_unread.png"});
     chrome.browserAction.setBadgeText({text:(numTotal.toString()+flags)});
@@ -145,6 +151,18 @@ function updateIcon(numTotal, flags){
   }
 }
 
+function parseMultipart(buf) {
+  var body = String.fromCharCode.apply(null, new Uint8Array(buf));
+  var msg = body.match(/(?:name=\"Post\"\s*)([^\-]*)/)[1];
+  var forum = body.match(/(?:name=\"f\"\s*)([^\-]*)/)[1];
+  var topic = body.match(/(?:name=\"t\"\s*)([^\-]*)/)[1];
+  console.log(forum_num == "60");
+  return {
+    'forum_num' : forum,
+    'topic_num' : topic,
+    'message' : msg
+  };
+}
 /*
  * Called when a request to the Japes domain is intercepted.
  *
@@ -158,8 +176,11 @@ function onUrlVisit(req){
   var unreadTeam = localStorage.serverTeam-localStorage.readTeam;
   var unreadGrant = localStorage.serverGrant-localStorage.readGrant;
   var unreadIp = localStorage.serverIp-localStorage.readIp;
-
-  if ((req.url.indexOf(teams["General"])!=-1)&&(unreadGeneral>0)){
+  console.log(req);
+  if(req.requestBody && req.requestBody.raw){
+    console.log(parseMultipart(req.requestBody.raw[0].bytes));
+  }
+  if ((req.url.indexOf(teams["general"])!=-1)&&(unreadGeneral>0)){
     localStorage.readGeneral = localStorage.serverGeneral;
     total = unreadTeam + unreadGrant + unreadIp;
     if(total>0)
@@ -177,7 +198,7 @@ function onUrlVisit(req){
       updateIcon(total,"GT")
     else 
       updateIcon(0,null);
-  } else if ((req.url.indexOf(teams["Grant Team"])!=-1)&&(unreadGrant>0)){
+  } else if ((req.url.indexOf(teams["grant"])!=-1)&&(unreadGrant>0)){
     localStorage.readGrant = localStorage.serverGrant;
     total = unreadGeneral + unreadTeam + unreadIp;
     if(total>0 && total==unreadGeneral)
@@ -188,7 +209,7 @@ function onUrlVisit(req){
       updateIcon(total,"GT")
     else 
       updateIcon(0,null);
-  } else if ((req.url.indexOf(teams["IP Team"])!=-1)&&(unreadIp>0)){
+  } else if ((req.url.indexOf(teams["ip"])!=-1)&&(unreadIp>0)){
     localStorage.readIp = localStorage.serverIp;
     total = unreadGeneral + unreadGrant + unreadTeam;
     if(total>0 && total==unreadGeneral)

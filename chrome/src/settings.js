@@ -33,10 +33,11 @@ save.onclick = function(){
         ipTeam = true;
     if(notifications)
     	notify = true;
-
+    console.log("clicked");
     // Once we've recieved confirmation that the request succeded, 
     // display success, wait a bit, then close the window
 	chrome.runtime.sendMessage({"team":team,"notifications":notify,"grantTeam":grantTeam,"ipTeam":ipTeam}, function(response){
+        console.log("blah");
         save.textContent = "Success! :)";
         save.setAttribute('class','btn btn-success btn-lg');
         setTimeout(function(){window.close()}, 2500);
