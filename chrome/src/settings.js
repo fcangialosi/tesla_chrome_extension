@@ -11,33 +11,34 @@ save.onclick = function(){
         grant = document.getElementById('grant').checked,
         ip = document.getElementById('ip').checked,
         notifications = document.getElementById('notifications').checked,
-        team = "",
+        playSounds = document.getElementById('sound').checked,
+        teams = [],
         notify = false,
-        grantTeam = false,
-        ipTeam = false;
+        sound = false;
 
     // Only one of these possible
     if(rectenna)
-        team = "Rectenna Team";
+        teams.push("rectenna");
     else if(antenna)
-   		team = "Antenna Team";
+   		teams.push("antenna");
     else if(modeling)
-    	team = "Modeling Team";
+    	teams.push("modeling");
     else if(lossy)
-    	team = "Lossy Events Team";
-    
+    	teams.push("lossy");
+ 
     // Any of these possible
     if(grant)
-        grantTeam = true;
+        teams.push("grant");
     if(ip)
-        ipTeam = true;
+        teams.push("ip");
     if(notifications)
     	notify = true;
-    console.log("clicked");
+    if(playSounds)
+        sound = true;
+
     // Once we've recieved confirmation that the request succeded, 
     // display success, wait a bit, then close the window
-	chrome.runtime.sendMessage({"team":team,"notifications":notify,"grantTeam":grantTeam,"ipTeam":ipTeam}, function(response){
-        console.log("blah");
+	chrome.runtime.sendMessage({"teams" : teams, "notifications" : notify, "sound" : sound}, function(response){
         save.textContent = "Success! :)";
         save.setAttribute('class','btn btn-success btn-lg');
         setTimeout(function(){window.close()}, 2500);

@@ -17,31 +17,48 @@ chrome.runtime.onInstalled.addListener(onInstall);
 // Entry point every time after installed
 chrome.runtime.onStartup.addListener(beginAcceptingRequests);
 
+function initializeLocalStorage(){
+  localStorage.clear();
+  localStorage.readAntennaCount = [];
+  localStorage.readGeneralCount = [];
+  localStorage.readGrantCount = [];
+  localStorage.readIpCount = [];
+  localStorage.readLossyCount = [];
+  localStorage.readRectennaCount = [];
+  localStorage.readModelingCount = [];
+  localStorage.diffAntennaCount = [];
+  localStorage.antennaTopic = [];
+  localStorage.diffGeneralCount = [];
+  localStorage.generalTopic = [  ];
+  localStorage.diffGrantCount = [];
+  localStorage.grantTopic = [];
+  localStorage.diffIpCount = [];
+  localStorage.ipTopic = [];
+  localStorage.diffLossyCount = [];
+  localStorage.lossyTopic = [];
+  localStorage.diffRectennaCount = [ ];
+  localStorage.rectennaTopic = [ ];
+  localStorage.diffModelingCount = [];
+  localStorage.modelingTopic = [];
+}
 /*
  * Called only when the extension is first installed
  */
 function onInstall(){
-  // Initialize saved variables
-  localStorage.readGeneral = 0;
-  localStorage.readTeam = 0;
-  localStorage.severGeneral = 0;
-  localStorage.serverTeam = 0;
-  localStorage.readGrant = 0;
-  localStorage.serverGrant = 0;
-  localStorage.readIp = 0;
-  localStorage.serverIp = 0;
+  initializeLocalStorage();
 
   // Once the user has entered their settings, begin making requests, and
   // change icon clicking action to go directly to Japes
   chrome.runtime.onMessage.addListener(function(request,sender,sendResponse){
-    if(request.team && request.notifications){
+    if(request.teams){
       // Tell settings.html that the request was successful
       sendResponse({done:"done"});
+
       // Save user settings
-      localStorage.teamName = request.team;
-      localStorage.notifications = request.notification;
-      localStorage.isOnGrantTeam = request.grantTeam;
-      localStorage.isOnIpTeam = request.ipTeam;
+      localStorage.teams = request.teams;
+      localStorage.notifications = request.notifications;
+      localStorage.sound = request.sound;
+
       // Start continuous polling process
       beginAcceptingRequests();
     }
@@ -82,12 +99,10 @@ function goToForum(){
   chrome.tabs.getAllInWindow(undefined, function (tabs) {
       for (var i=0, tab; tab = tabs[i]; i++) {
         if(tab.url && tab.url.indexOf(japesUrl) != -1){
-          console.log('Found Japes tab.');
           chrome.tabs.update(tab.id,{selected:true});
           return;
         }
       }
-      console.log("Couldn't find Japes tab, making a new one...");
     chrome.tabs.create({url : japesUrl});
   });
 }
@@ -104,12 +119,12 @@ function getPosts(){
   req.send(null);
 }
 
-function newPost(forum_num){
+function newPost(interception){
   var req = new XMLHttpRequest();
-  var postUrl = "http://sheltered-springs-7574.herokuapp.com/newpost?secret=42xigUBluzIGgGl8zOSA&forum_num="+forum_num+"&topic_num="+topic_num;
+  var postUrl = "http://sheltered-springs-7574.herokuapp.com/newpost?secret=42xigUBluzIGgGl8zOSA&forum_num="+interception['forum_num']+"&topic_num="+interception['topic_num'];
   req.open("POST",(postUrl),true);
-  req.onload = function(e){console.log("Successful post: " + e)};
-  req.onerror = function(e){console.log("Error " + e.target.status)};
+  req.onload = function(e){readMyOwnPost(interception['topic_num'])};
+  req.onerror = function(e){};
   req.send(null);
 }
 
@@ -120,31 +135,174 @@ function newPost(forum_num){
  */
 function onSuccess(e){
   var posts = JSON.parse(e.target.responseText);
-  if(!(localStorage.serverGeneral == localStorage.readGeneral)||(localStorage.severTeam==localStorage.readTeam)||(localStorage.serverGrant==localStorage.readGrant)||(localStorage.serverIp==localStorage.readIp)){
-    localStorage.serverGeneral = parseInt(posts["general"]);
-    localStorage.serverTeam = parseInt(posts[localStorage.teamName]);
-    if(localStorage.isOnGrantTeam)
-      localStorage.serverGrant = parseInt(posts["grant"]);
-    if(localStorage.isOnIpTeam)
-      localStorage.serverIp = parseInt(posts["ip"]);
-
-    var unreadGeneral = parseInt(localStorage.serverGeneral) - parseInt(localStorage.readGeneral);
-    var unreadTeam = (parseInt(localStorage.serverTeam)+parseInt(localStorage.serverGrant)+parseInt(localStorage.serverIp)) - (parseInt(localStorage.readTeam)+parseInt(localStorage.readGrant)+parseInt(localStorage.readIp));
-    var flags = ""
-
-    if(unreadGeneral > 0)
-      flags += "G";
-    if(unreadTeam > 0)
-      flags += "T";
-    if(flags)
-      updateIcon(unreadGeneral+unreadTeam,flags);
-  }
+  var new_posts = calculateDiffs(posts);
+  updateIcon(new_posts);
 }
 
-function updateIcon(numTotal, flags){
+function fillArray(n, fill) {
+  var arr = Array.apply(null, Array(n));
+  return arr.map(function (x, i) { return fill });
+}
+
+function isOnTeam(team){
+  return (localStorage.teams.indexOf(team) != -1);
+}
+
+function subtractArrays(read_str, server){
+  read = JSON.parse("[" + read_str + "]");
+  var diff = new Array(read.length);
+  for(var i=0; i<read.length; i++){
+    diff[i] = server[i] - read[i];
+  }
+  return diff;
+}
+
+function pushN(arr_str, n){
+  arr = JSON.parse("[" + arr_str + "]");
+  for(var i=0; i<n; i++){
+    arr.push(0);
+  }
+  return arr;
+}
+
+function arraysDiff(a_str,b_str){
+  a = JSON.parse("[" + a_str + "]");
+  b = JSON.parse("[" + b_str + "]");
+  for(var i=0; i<a.length; i++){
+    if(a[i] != b[i]){
+      return true;
+    }
+  }
+  return false;
+}
+
+function addArray(arr_str){
+  arr = JSON.parse("[" + arr_str + "]");
+  total = 0;
+  for(var i=0; i<arr.length; i++){
+    total+=arr[i];
+  }
+  return total;
+}
+
+function calculateDiffs(posts){
+  var total = 0;
+  if(isOnTeam("antenna") && posts['antennaTopic']) {
+    if(localStorage.antennaTopic.length == 0){
+      localStorage.antennaTopic = posts['antennaTopic'].slice(0);
+      localStorage.readAntennaCount = fillArray(posts['antennaCount'].length, 0);
+      localStorage.diffAntennaCount = posts['antennaCount'].slice(0);
+    } else {
+      num_new = (posts['antennaCount'].length - ((localStorage.readAntennaCount.length+1)/2));
+      if(num_new > 0){
+        localStorage.antennaTopic = posts['antennaTopic'].slice(0);
+        localStorage.readAntennaCount = pushN(localStorage.readAntennaCount, num_new);
+      } else {
+        localStorage.diffAntennaCount = subtractArrays(localStorage.readAntennaCount, posts['antennaCount']);
+      }
+    }
+    total += addArray(localStorage.diffAntennaCount);
+  }
+  if(posts['generalTopic']) {
+    if(localStorage.generalTopic.length == 0){
+        localStorage.generalTopic = posts['generalTopic'].slice(0);
+        localStorage.readGeneralCount = fillArray(posts['generalCount'].length, 0);
+        localStorage.diffGeneralCount = posts['generalCount'].slice(0);
+    } else {
+      num_new = (posts['generalCount'].length - ((localStorage.readGeneralCount.length+1)/2));
+      if(num_new > 0){
+        localStorage.generalTopic = posts['generalTopic'].slice(0);
+        localStorage.readGeneralCount = pushN(localStorage.readGeneralCount, num_new);
+      } 
+      localStorage.diffGeneralCount = subtractArrays(localStorage.readGeneralCount, posts['generalCount']);
+    }
+    total += addArray(localStorage.diffGeneralCount);
+  }
+  if(isOnTeam("grant") && posts['grantTopic']) {
+    if(localStorage.grantTopic.length == 0){
+        localStorage.grantTopic = posts['grantTopic'].slice(0);
+        localStorage.readGrantCount = fillArray(posts['grantCount'].length, 0);
+        localStorage.diffGrantCount = posts['grantCount'].slice(0);
+    } else {
+      num_new = (posts['grantCount'].length - ((localStorage.readGrantCount.length+1)/2));
+      if(num_new > 0){
+        localStorage.grantTopic = posts['grantTopic'].slice(0);
+        localStorage.readGrantCount = pushN(localStorage.readGrantCount, num_new);
+      } else {
+        localStorage.diffGrantCount = subtractArrays(localStorage.readGrantCount, posts['grantCount']);
+      }
+    }
+    total += addArray(localStorage.diffGrantCount);
+  }
+  if(isOnTeam("ip") && posts['ipTopic']) {
+    if(localStorage.ipTopic.length == 0){
+        localStorage.ipTopic = posts['ipTopic'].slice(0);
+        localStorage.readIpCount = fillArray(posts['ipCount'].length, 0);
+        localStorage.diffIpCount = posts['ipCount'].slice(0);
+    } else {
+      num_new = (posts['ipCount'].length - ((localStorage.readIpCount.length+1)/2));
+      if(num_new > 0){
+        localStorage.ipTopic = posts['ipTopic'].slice(0);
+        localStorage.readIpCount = pushN(localStorage.readIpCount, num_new);
+      }
+      localStorage.diffIpCount = subtractArrays(localStorage.readIpCount, posts['ipCount']);
+    }
+    total += addArray(localStorage.diffIpCount);
+  }
+  if(isOnTeam("lossy") && posts['lossyTopic']) {
+    if(localStorage.lossyTopic.length == 0){
+        localStorage.lossyTopic = posts['lossyTopic'].slice(0);
+        localStorage.readLossyCount = fillArray(posts['lossyCount'].length, 0);
+        localStorage.diffLossyCount = posts['lossyCount'].slice(0);
+    } else {
+      num_new = (posts['lossyCount'].length - ((localStorage.readLossyCount.length+1)/2));
+      if(num_new > 0){
+        localStorage.lossyTopic = posts['lossyTopic'].slice(0);
+        localStorage.readLossyCount = pushN(localStorage.readLossyCount, num_new);
+      }
+      localStorage.diffLossyCount = subtractArrays(localStorage.readLossyCount, posts['lossyCount']);
+    }
+    total += addArray(localStorage.diffLossyCount);
+  }
+
+  if(isOnTeam("rectenna") && posts['rectennaTopic']) {
+    if(localStorage.rectennaTopic.length == 0){
+        localStorage.rectennaTopic = posts['rectennaTopic'].slice(0);
+        localStorage.readRectennaCount = fillArray(posts['rectennaCount'].length, 0);
+        localStorage.diffRectennaCount = posts['rectennaCount'].slice(0);
+    } else {
+      num_new = (posts['rectennaCount'].length - ((localStorage.readRectennaCount.length+1)/2));
+      if(num_new > 0){
+        localStorage.rectennaTopic = posts['rectennaTopic'].slice(0);
+        localStorage.readRectennaCount = pushN(localStorage.readRectennaCount, num_new);
+      }
+      localStorage.diffRectennaCount = subtractArrays(localStorage.readRectennaCount, posts['rectennaCount']);
+    }
+    total += addArray(localStorage.diffRectennaCount);
+  }
+  if(isOnTeam("modeling") && posts['modelingTopic']) {
+    if(localStorage.modelingTopic.length == 0){
+        localStorage.modelingTopic = posts['modelingTopic'].slice(0);
+        localStorage.readModelingCount = fillArray(posts['modelingCount'].length, 0);
+        localStorage.diffModelingCount = posts['modelingCount'].slice(0);
+    } else {
+      num_new = (posts['modelingCount'].length - ((localStorage.readModelingCount.length+1)/2));
+      if(num_new > 0){
+        localStorage.modelingTopic = posts['modelingTopic'].slice(0);
+        localStorage.readModelingCount = pushN(localStorage.readModelingCount, num_new);
+      } 
+      localStorage.diffModelingCount = subtractArrays(localStorage.readModelingCount, posts['modelingCount']); 
+    }
+    total += addArray(localStorage.diffModelingCount);
+  }
+  return total;
+}
+
+function updateIcon(numTotal){
+  localStorage.currentTotal = numTotal;
   if(numTotal > 0){
     chrome.browserAction.setIcon({path:"honors_unread.png"});
-    chrome.browserAction.setBadgeText({text:(numTotal.toString()+flags)});
+    chrome.browserAction.setBadgeText({text:(numTotal.toString())});
   } else {
     chrome.browserAction.setIcon({path:"honors_read.png"});
     chrome.browserAction.setBadgeText({text:""});
@@ -156,12 +314,19 @@ function parseMultipart(buf) {
   var msg = body.match(/(?:name=\"Post\"\s*)([^\-]*)/)[1];
   var forum = body.match(/(?:name=\"f\"\s*)([^\-]*)/)[1];
   var topic = body.match(/(?:name=\"t\"\s*)([^\-]*)/)[1];
-  console.log(forum_num == "60");
   return {
-    'forum_num' : forum,
-    'topic_num' : topic,
-    'message' : msg
+    'forum_num' : forum.substring(0,forum.length-1),
+    'topic_num' : topic.substring(0,topic.length-1),
+    'message' : msg.substring(0,msg.length-1)
   };
+}
+
+function parseFormData(form){
+  return {
+    'forum_num' : form.f[0],
+    'topic_num' : form.t[0],
+    'message' : form.Post[0]
+  }
 }
 /*
  * Called when a request to the Japes domain is intercepted.
@@ -172,53 +337,169 @@ function parseMultipart(buf) {
  */
 function onUrlVisit(req){
   var forumURL = "http://z4.invisionfree.com/japes/index.php?showforum=";
-  var unreadGeneral = localStorage.serverGeneral-localStorage.readGeneral;
-  var unreadTeam = localStorage.serverTeam-localStorage.readTeam;
-  var unreadGrant = localStorage.serverGrant-localStorage.readGrant;
-  var unreadIp = localStorage.serverIp-localStorage.readIp;
-  console.log(req);
   if(req.requestBody && req.requestBody.raw){
-    console.log(parseMultipart(req.requestBody.raw[0].bytes));
+    interception = parseMultipart(req.requestBody.raw[0].bytes);
+    newPost(interception);
+    //makeNotification(interception);
   }
-  if ((req.url.indexOf(teams["general"])!=-1)&&(unreadGeneral>0)){
-    localStorage.readGeneral = localStorage.serverGeneral;
-    total = unreadTeam + unreadGrant + unreadIp;
-    if(total>0)
-      updateIcon(total,"T");
-    else
-      updateIcon(0,null);
-  } else if ((req.url.indexOf(teams[localStorage.teamName])!=-1)&&(unreadTeam>0)){
-    localStorage.readTeam = localStorage.serverTeam;
-    total = unreadGeneral + unreadGrant + unreadIp;
-    if(total>0 && total==unreadGeneral)
-      updateIcon(total,"G");
-    else if(total>0 && unreadGeneral==0)
-      updateIcon(total,"T")
-    else if(total>0)
-      updateIcon(total,"GT")
-    else 
-      updateIcon(0,null);
-  } else if ((req.url.indexOf(teams["grant"])!=-1)&&(unreadGrant>0)){
-    localStorage.readGrant = localStorage.serverGrant;
-    total = unreadGeneral + unreadTeam + unreadIp;
-    if(total>0 && total==unreadGeneral)
-      updateIcon(total,"G");
-    else if(total>0 && unreadGeneral==0)
-      updateIcon(total,"T")
-    else if(total>0)
-      updateIcon(total,"GT")
-    else 
-      updateIcon(0,null);
-  } else if ((req.url.indexOf(teams["ip"])!=-1)&&(unreadIp>0)){
-    localStorage.readIp = localStorage.serverIp;
-    total = unreadGeneral + unreadGrant + unreadTeam;
-    if(total>0 && total==unreadGeneral)
-      updateIcon(total,"G");
-    else if(total>0 && unreadGeneral==0)
-      updateIcon(total,"T")
-    else if(total>0)
-      updateIcon(total,"GT")
-    else 
-      updateIcon(0,null);
+  if(req.requestBody && req.requestBody.formData){
+    interception = parseFormData(req.requestBody.formData);
+    newPost(interception);
+    //makeNotification(interception);
   } 
+  var post_viewed = req.url.match(/(?:showtopic=)(\d+)/);
+  if(post_viewed){
+    topic_num = post_viewed[1];
+    just_read = findAndUpdateReadCount(topic_num);
+    updateIcon((parseInt(localStorage.currentTotal) - just_read));
+  }
 }
+
+function strToArr(str){
+  return JSON.parse("[" + str + "]");
+}
+
+function readMyOwnPost(topic_num){
+  var x, y;
+  x = strToArr(localStorage.antennaTopic);  
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readAntennaCount); 
+    new_arr[y] += 1
+    localStorage.readAntennaCount = new_arr;
+  }
+  x = strToArr(localStorage.generalTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readGeneralCount); 
+    new_arr[y] += 1
+    localStorage.readGeneralCount = new_arr;
+  }
+  x = strToArr(localStorage.grantTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readGrantCount); 
+    new_arr[y] += 1
+    localStorage.readGrantCount = new_arr;
+  }
+  x = strToArr(localStorage.ipTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readIpCount); 
+    new_arr[y] += 1
+    localStorage.readIpCount = new_arr;
+  }
+  x = strToArr(localStorage.lossyTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readLossyCount); 
+    new_arr[y] += 1
+    localStorage.readLossyCount = new_arr;
+  }
+  x = strToArr(localStorage.rectennaTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readRectennaCount); 
+    new_arr[y] += 1
+    localStorage.readRectennaCount = new_arr;
+  }
+  x = strToArr(localStorage.modelingTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readModelingCount); 
+    new_arr[y] += 1
+    localStorage.readModelingCount = new_arr;
+  }
+}
+function findAndUpdateReadCount(topic_num){
+  var x, y;
+  x = strToArr(localStorage.antennaTopic);  
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readAntennaCount); 
+    just_read = strToArr(localStorage.diffAntennaCount)[y];
+    if(just_read > new_arr[y]){
+      new_arr[y] = just_read
+      localStorage.readAntennaCount = new_arr;
+      return new_arr[y];
+    }
+  }
+  x = strToArr(localStorage.generalTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readGeneralCount); 
+    just_read = strToArr(localStorage.diffGeneralCount)[y];
+    if(just_read > new_arr[y]){
+      new_arr[y] = just_read
+      localStorage.readGeneralCount = new_arr;
+      return new_arr[y];
+    }
+  }
+  x = strToArr(localStorage.grantTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readGrantCount); 
+    just_read = strToArr(localStorage.diffGrantCount)[y];
+    if(just_read > new_arr[y]){
+      new_arr[y] = just_read
+      localStorage.readGrantCount = new_arr;
+      return new_arr[y];
+    }
+  }
+  x = strToArr(localStorage.ipTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readIpCount); 
+    just_read = strToArr(localStorage.diffIpCount)[y];
+    if(just_read > new_arr[y]){
+      new_arr[y] = just_read
+      localStorage.readIpCount = new_arr;
+      return new_arr[y];
+    }
+  }
+  x = strToArr(localStorage.lossyTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readLossyCount); 
+    just_read = strToArr(localStorage.diffLossyCount)[y];
+    if(just_read > new_arr[y]){
+      new_arr[y] = just_read
+      localStorage.readLossyCount = new_arr;
+      return new_arr[y];
+    }
+  }
+  x = strToArr(localStorage.rectennaTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readRectennaCount); 
+    just_read = strToArr(localStorage.diffRectennaCount)[y];
+    if(just_read > new_arr[y]){
+      new_arr[y] = just_read
+      localStorage.readRectennaCount = new_arr;
+      return new_arr[y];
+    }
+  }
+  x = strToArr(localStorage.modelingTopic);
+  y = x.indexOf(parseInt(topic_num));
+  if(y != -1){
+    new_arr = strToArr(localStorage.readModelingCount); 
+    just_read = strToArr(localStorage.diffModelingCount)[y];
+    if(just_read > new_arr[y]){
+      new_arr[y] = just_read
+      localStorage.readModelingCount = new_arr;
+      return new_arr[y];
+    }
+  }
+  return 0;
+}
+
+// function makeNotification(interception){
+//   if(localStorage.notifications === "true"){
+//     if(localStorage.sound === "true"){
+//       var notification = webkitNotifications.createHTMLNotification('notification_sound.html');
+//       notification.show();
+//     }
+//     var notification = webkitNotifications.createHTMLNotification('notification_nosound.html');
+//     notification.show();
+//   }
+// }

@@ -17,9 +17,10 @@
     "storage",
     "webNavigation",
     "webRequest",
+    "notifications",
     "*://z4.invisionfree.com/*",
     "*://sheltered-springs-7574.herokuapp.com/*"
    ],
-  "version": "0.1",
+  "version": "1.0",
   "manifest_version": 2
 }
